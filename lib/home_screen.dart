@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool speechEnable = false;
   ChatUser currentUser = ChatUser(id: "0", firstName: "User");
   ChatUser geminiUser = ChatUser(id: "1", firstName: "gemini");
+  ChatUser geminiUser2 = ChatUser(id: "2", firstName: "gemini2");
   
   @override
   void initState() {
