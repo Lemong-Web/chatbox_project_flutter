@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   FlutterTts tts = FlutterTts();
   TextEditingController chatController = TextEditingController();
   bool speechEnable = false;
+  bool botToBotMode = false;
   ChatUser currentUser = ChatUser(id: "0", firstName: "User");
   ChatUser geminiUser = ChatUser(id: "1", firstName: "gemini");
   ChatUser geminiUser2 = ChatUser(id: "2", firstName: "gemini2");
@@ -70,6 +71,15 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const Text('Gemini Chatbox', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             Spacer(),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  botToBotMode = !botToBotMode;
+                });
+              }, 
+              icon: Icon(Icons.smart_toy), style: ButtonStyle(
+                iconColor: WidgetStateProperty.all(botToBotMode ? Colors.black : Colors.white)
+              )),
             IconButton(
               onPressed: () {refreshPage();}, 
               icon: Icon(Icons.refresh), color: Colors.white,)
@@ -123,23 +133,28 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           return Text(
             message.text,
-            style: const TextStyle(fontSize: 16, color: Colors.white),
+            style: const TextStyle(fontSize: 16, color: Colors.black),
           );
         },
       ),
     );
   }
-  // Cái hàm này có thể dùng để sử lí message từ người dùng
+  // Cái hàm này có thể dùng để sử lí message từ người dùng (ai cũng có thể là ChatMessage được không nhất thiết phải là người dùng)
   void _sendMessage(ChatMessage chatMessage) {
     setState(() {
       typingUsers = [geminiUser];
       messages = [chatMessage, ...messages];
-  });
+    });
+    if (!botToBotMode) {
+      generateFromGemini(chatMessage.text, geminiUser);
+      return;
+    }
+    startBottoBot(chatMessage.text);
+  }
 
-  try {
-    String question = chatMessage.text;
+  void generateFromGemini(String promt, ChatUser targetBot) {
     ChatMessage streamingMessage = ChatMessage(
-      user: geminiUser,
+      user: targetBot,
       createdAt: DateTime.now(),
       text: "",
     );
@@ -150,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
       messages = [streamingMessage, ...messages];
     });
     // ignore: deprecated_member_use
-    gemini.streamGenerateContent(question).listen((event) {
+    gemini.streamGenerateContent(promt).listen((event) {
       String chunk = event.content?.parts
         ?.whereType<TextPart>()
         .map((p) => p.text)
@@ -158,12 +173,12 @@ class _HomeScreenState extends State<HomeScreen> {
         .replaceAll(RegExp(r'\*+'), "")
         .trim() ??
         "";
-      // Khi nhận được chunk từ gemini, thì ghi đè lên phần tử đầu tiên 
+        // Khi nhận được chunk từ gemini, thì ghi đè lên phần tử đầu tiên 
       // first.text = text đã có (đã nhận từ trước) VD: hello wor rồi cộng thêm chunk "ld"
       // chunk = phần text mới Streaming mang về
       // messages[0] bị thay thế bời 1 chatMessages mới chứa text cộng dồn
       setState(() {
-        // ChatMessage first = messages[0] (2 cách này dống nhau nhưng dùng .first cho ngắn và an toàn hơn.)
+        // ChatMessage first = messages[0] (2 cách này giống nhau nhưng dùng .first cho ngắn và an toàn hơn.)
         // cơ bản là đang lấy phần tử đầu của messages, trong khi đó phần tử đầu lại đang là streamingMessage suy ra
         // messages.first == StreamingMessage
         // message.firts giúp:
@@ -172,19 +187,55 @@ class _HomeScreenState extends State<HomeScreen> {
         // ChatMessage first = messages.first; // first.text = ""
         // messages[0] = ChatMessage(text: first.text + "Hel"); // => "Hel" hel là chunk mới nhận đc
         ChatMessage first = messages.first;
-        typingUsers = [];
         messages[0] = ChatMessage(
-          user: geminiUser,
+          user: targetBot,
           createdAt: DateTime.now(),
           text: first.text + chunk,
         );
+          typingUsers = [];
       });
     });
-    } catch (e) {
-      // ignore: avoid_print
-      print(e);
+  }
+
+  void startBottoBot(String firstMessage) async {
+    String gemini1Reply = await askGemini(firstMessage, geminiUser);
+    _loopBottoBot(gemini1Reply, true);
+  }
+
+  void _loopBottoBot(String lastMessage, bool turnGemini1) async {
+    if (!botToBotMode) return;
+    String reply;
+
+    if(turnGemini1) {
+      reply = await askGemini(lastMessage, geminiUser);
+    } else {
+      reply = await askGemini(lastMessage, geminiUser2);
     }
+
+    Future.delayed(Duration(milliseconds: 500), () {
+      _loopBottoBot(reply, !turnGemini1);
+    }); 
+  }
+
+  Future<String> askGemini(String promt, ChatUser bot) async {
+    String buffer = "";
+    // ignore: deprecated_member_use
+    await for (var event in gemini.streamGenerateContent(promt)) {
+      String chunk = event.content?.parts
+      ?.whereType<TextPart>()
+      .map((p) => p.text)
+      .join(" ")
+      .replaceAll(RegExp(r'\*+'), "")
+      .trim() ?? "";
+
+      buffer += chunk;
+    } 
+    setState(() {
+      messages = [
+        ChatMessage(user: bot, createdAt: DateTime.now(), text: buffer),
+        ...messages
+      ];
+    });
+    return buffer;
   }
 }
-
-  
