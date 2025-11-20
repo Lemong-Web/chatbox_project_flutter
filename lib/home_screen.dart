@@ -33,6 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
     initSpeech();
   }
 
+  void initTts() {
+    tts.setLanguage("vi-VN");
+  }
+
   void initSpeech() async {
     speechEnable = await stt.initialize();
     setState(() {}); 
@@ -41,13 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void startListening() async {
     if (speechEnable) {
       stt.listen(
+        localeId: 'vi-VN',
         onResult: (result) {
           setState(() {
             chatController.text = result.recognizedWords;
-          });
-        }
-      );
-    }
+          }
+        );
+      }
+    );
+  }
     setState(() {});
   }
   void stopListening() async {
@@ -119,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 message.text,
                 style: const TextStyle(fontSize: 16),
               ),
-              Line(),
+              const Line(),
               Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
@@ -174,27 +180,29 @@ class _HomeScreenState extends State<HomeScreen> {
         .trim() ??
         "";
         // Khi nhận được chunk từ gemini, thì ghi đè lên phần tử đầu tiên 
-      // first.text = text đã có (đã nhận từ trước) VD: hello wor rồi cộng thêm chunk "ld"
-      // chunk = phần text mới Streaming mang về
-      // messages[0] bị thay thế bời 1 chatMessages mới chứa text cộng dồn
-      setState(() {
-        // ChatMessage first = messages[0] (2 cách này giống nhau nhưng dùng .first cho ngắn và an toàn hơn.)
-        // cơ bản là đang lấy phần tử đầu của messages, trong khi đó phần tử đầu lại đang là streamingMessage suy ra
-        // messages.first == StreamingMessage
-        // message.firts giúp:
-        // đọc nội dung  hiện tại của tin nhắn đang được streaming
-        // nối thêm chunk mới vào
-        // ChatMessage first = messages.first; // first.text = ""
-        // messages[0] = ChatMessage(text: first.text + "Hel"); // => "Hel" hel là chunk mới nhận đc
-        ChatMessage first = messages.first;
-        messages[0] = ChatMessage(
-          user: targetBot,
-          createdAt: DateTime.now(),
-          text: first.text + chunk,
+        // first.text = text đã có (đã nhận từ trước) VD: hello wor rồi cộng thêm chunk "ld"
+        // chunk = phần text mới Streaming mang về
+        // messages[0] bị thay thế bời 1 chatMessages mới chứa text cộng dồn
+        setState(() {
+          // ChatMessage first = messages[0] (2 cách này giống nhau nhưng dùng .first cho ngắn và an toàn hơn.)
+          // cơ bản là đang lấy phần tử đầu của messages, trong khi đó phần tử đầu lại đang là streamingMessage suy ra
+          // messages.first == StreamingMessage
+          // message.firts giúp:
+          // đọc nội dung  hiện tại của tin nhắn đang được streaming
+          // nối thêm chunk mới vào
+          // ChatMessage first = messages.first; // first.text = ""
+          // messages[0] = ChatMessage(text: first.text + "Hel"); // => "Hel" hel là chunk mới nhận đc
+          ChatMessage first = messages.first;
+          messages[0] = ChatMessage(
+            user: targetBot,
+            createdAt: DateTime.now(),
+            text: first.text + chunk,
+          );
+            typingUsers = [];
+          }
         );
-          typingUsers = [];
-      });
-    });
+      }
+    );
   }
 
   void startBottoBot(String firstMessage) async {
@@ -214,8 +222,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     Future.delayed(Duration(milliseconds: 500), () {
       _loopBottoBot(reply, !turnGemini1);
-    }); 
-  }
+    }
+  ); 
+}
 
   Future<String> askGemini(String promt, ChatUser bot) async {
     String buffer = "";
@@ -232,10 +241,16 @@ class _HomeScreenState extends State<HomeScreen> {
     } 
     setState(() {
       messages = [
-        ChatMessage(user: bot, createdAt: DateTime.now(), text: buffer),
+        ChatMessage(
+          user: bot, 
+          createdAt: DateTime.now(), 
+          text: buffer
+        ),
         ...messages
       ];
-    });
+        typingUsers = [];
+      }
+    );
     return buffer;
   }
 }
